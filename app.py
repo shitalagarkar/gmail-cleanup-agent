@@ -86,8 +86,17 @@ def get_gmail_service():
         if not token_data:
             return None
         try:
-            creds = Credentials.from_authorized_user_info(
-                token_data, SCOPES
+            credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+            creds_data = json.loads(credentials_json)
+            client_id = creds_data['web']['client_id']
+            client_secret = creds_data['web']['client_secret']
+
+            creds = Credentials(
+                token=token_data['access_token'],
+                refresh_token=token_data.get('refresh_token'),
+                token_uri='https://oauth2.googleapis.com/token',
+                client_id=client_id,
+                client_secret=client_secret
             )
         except Exception as e:
             print(f"Error loading session credentials: {e}")
@@ -1035,8 +1044,6 @@ def send_unsubscribe():
 @app.route('/auth/login')
 def auth_login():
     """Starts Gmail OAuth flow for hosted version."""
-    # Required for OAuth over HTTPS on Render
-    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
     SCOPES = [
         'https://www.googleapis.com/auth/gmail.modify',
         'https://mail.google.com/'
@@ -1044,110 +1051,99 @@ def auth_login():
 
     credentials_json = os.getenv('GOOGLE_CREDENTIALS')
     if not credentials_json:
-        return jsonify({
-            'status': 'error',
-            'message': 'Google credentials not configured on server'
-        })
+        return "Error: Google credentials not configured", 500
 
     try:
-        import tempfile
-        import google_auth_oauthlib.flow as oauth_flow
+        creds_data = json.loads(credentials_json)
+        client_id = creds_data['web']['client_id']
+        client_secret = creds_data['web']['client_secret']
 
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as f:
-            f.write(credentials_json)
-            temp_path = f.name
-        
-         # Force HTTPS on Render
-        if os.getenv('RENDER'):
-            redirect_uri = 'https://gmail-cleanup-agent.onrender.com/auth/callback'
-        else:
-            redirect_uri = url_for('auth_callback', _external=True)
+        redirect_uri = 'https://gmail-cleanup-agent.onrender.com/auth/callback'
 
-
-        flow = oauth_flow.Flow.from_client_secrets_file(
-            temp_path,
-            scopes=SCOPES,
+        from requests_oauthlib import OAuth2Session
+        oauth = OAuth2Session(
+            client_id,
+            scope=SCOPES,
             redirect_uri=redirect_uri
         )
-        os.unlink(temp_path)
 
-        auth_url, state = flow.authorization_url(
+        auth_url, state = oauth.authorization_url(
+            'https://accounts.google.com/o/oauth2/auth',
             access_type='offline',
-            include_granted_scopes='true',
-            code_challenge_method=None
+            prompt='consent'
         )
 
         session['oauth_state'] = state
         return redirect(auth_url)
 
     except Exception as e:
-        return jsonify({
-            'status': 'error',
-            'message': str(e)
-        })
+        print(f"Auth login error: {e}")
+        return f"Auth error: {str(e)}", 500
 
 
 @app.route('/auth/callback')
 def auth_callback():
     """Handles Gmail OAuth callback."""
-    SCOPES = [
-        'https://www.googleapis.com/auth/gmail.modify',
-        'https://mail.google.com/'
-    ]
+    print(f"=== AUTH CALLBACK TRIGGERED ===")
+    print(f"Request URL: {request.url}")
 
     credentials_json = os.getenv('GOOGLE_CREDENTIALS')
 
     try:
-        import tempfile
-        import google_auth_oauthlib.flow as oauth_flow
+        creds_data = json.loads(credentials_json)
+        client_id = creds_data['web']['client_id']
+        client_secret = creds_data['web']['client_secret']
 
-        with tempfile.NamedTemporaryFile(
-            mode='w', suffix='.json', delete=False
-        ) as f:
-            f.write(credentials_json)
-            temp_path = f.name
+        redirect_uri = 'https://gmail-cleanup-agent.onrender.com/auth/callback'
 
-        # Force HTTPS on Render
-        if os.getenv('RENDER'):
-            redirect_uri = 'https://gmail-cleanup-agent.onrender.com/auth/callback'
-        else:
-            redirect_uri = url_for('auth_callback', _external=True)
+        from requests_oauthlib import OAuth2Session
+        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-        flow = oauth_flow.Flow.from_client_secrets_file(
-            temp_path,
-            scopes=SCOPES,
+        oauth = OAuth2Session(
+            client_id,
+            state=session.get('oauth_state'),
             redirect_uri=redirect_uri
         )
-        os.unlink(temp_path)
 
-         #Fix for missing code verifier issue
-        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
-        flow.fetch_token(
-            authorization_response=request.url,
-            code_verifier=None
+        # Fix URL scheme for Render (https)
+        callback_url = request.url.replace('http://', 'https://')
+
+        token = oauth.fetch_token(
+            'https://oauth2.googleapis.com/token',
+            authorization_response=callback_url,
+            client_secret=client_secret
         )
-        creds = flow.credentials
 
         # Save token to session
-        session['gmail_token'] = json.loads(creds.to_json())
+        session['gmail_token'] = token
         session['gmail_authenticated'] = True
+        session.modified = True
 
         # Get user email
         try:
+            from google.oauth2.credentials import Credentials
+            creds = Credentials(
+                token=token['access_token'],
+                refresh_token=token.get('refresh_token'),
+                token_uri='https://oauth2.googleapis.com/token',
+                client_id=client_id,
+                client_secret=client_secret
+            )
             service = build('gmail', 'v1', credentials=creds)
             profile = service.users().getProfile(userId='me').execute()
             session['gmail_email'] = profile.get('emailAddress', '')
-        except Exception:
+            session.modified = True
+            print(f"Authenticated as: {session['gmail_email']}")
+        except Exception as e:
+            print(f"Error getting email: {e}")
             session['gmail_email'] = ''
 
+        print(f"=== AUTH COMPLETE ===")
         return redirect('/')
 
     except Exception as e:
         print(f"Auth callback error: {e}")
         return redirect('/?error=auth_failed')
-
 
 @app.route('/auth/status')
 def auth_status():
