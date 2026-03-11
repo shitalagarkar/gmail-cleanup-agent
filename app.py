@@ -1035,6 +1035,8 @@ def send_unsubscribe():
 @app.route('/auth/login')
 def auth_login():
     """Starts Gmail OAuth flow for hosted version."""
+    # Required for OAuth over HTTPS on Render
+    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
     SCOPES = [
         'https://www.googleapis.com/auth/gmail.modify',
         'https://mail.google.com/'
@@ -1073,7 +1075,8 @@ def auth_login():
 
         auth_url, state = flow.authorization_url(
             access_type='offline',
-            include_granted_scopes='true'
+            include_granted_scopes='true',
+            code_challenge_method=None
         )
 
         session['oauth_state'] = state
@@ -1119,7 +1122,12 @@ def auth_callback():
         )
         os.unlink(temp_path)
 
-        flow.fetch_token(authorization_response=request.url)
+         #Fix for missing code verifier issue
+        os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+        flow.fetch_token(
+            authorization_response=request.url,
+            code_verifier=None
+        )
         creds = flow.credentials
 
         # Save token to session
