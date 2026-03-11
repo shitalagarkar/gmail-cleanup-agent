@@ -1056,11 +1056,18 @@ def auth_login():
         ) as f:
             f.write(credentials_json)
             temp_path = f.name
+        
+         # Force HTTPS on Render
+        if os.getenv('RENDER'):
+            redirect_uri = 'https://gmail-cleanup-agent.onrender.com/auth/callback'
+        else:
+            redirect_uri = url_for('auth_callback', _external=True)
+
 
         flow = oauth_flow.Flow.from_client_secrets_file(
             temp_path,
             scopes=SCOPES,
-            redirect_uri=url_for('auth_callback', _external=True)
+            redirect_uri=redirect_uri
         )
         os.unlink(temp_path)
 
@@ -1099,10 +1106,16 @@ def auth_callback():
             f.write(credentials_json)
             temp_path = f.name
 
+        # Force HTTPS on Render
+        if os.getenv('RENDER'):
+            redirect_uri = 'https://gmail-cleanup-agent.onrender.com/auth/callback'
+        else:
+            redirect_uri = url_for('auth_callback', _external=True)
+
         flow = oauth_flow.Flow.from_client_secrets_file(
             temp_path,
             scopes=SCOPES,
-            redirect_uri=url_for('auth_callback', _external=True)
+            redirect_uri=redirect_uri
         )
         os.unlink(temp_path)
 
