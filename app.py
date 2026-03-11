@@ -5,7 +5,8 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from datetime import date, datetime, timedelta
 from collections import defaultdict
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify, render_template, session
+from flask_session import Session
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -14,17 +15,41 @@ load_dotenv()
 
 # Flask app
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+Session(app)
 
 # Gmail service global variable
 gmail_service = None
 
-# OpenAI client
-openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+# OpenAI is optional — initialized per request
+OPENAI_API_KEY_ENV = os.getenv('OPENAI_API_KEY')
 
 # SCOPES
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify',
           'https://mail.google.com/']
 
+
+# ─────────────────────────────────────────
+# OpenAI Helper
+# ─────────────────────────────────────────
+
+def get_openai_client():
+    """
+    Returns OpenAI client if API key is available.
+    Checks session first, then environment variable.
+    Returns None if no key found.
+    """
+    api_key = session.get('openai_api_key') or OPENAI_API_KEY_ENV
+    if api_key:
+        return OpenAI(api_key=api_key)
+    return None
+
+
+def has_openai_key():
+    """Check if OpenAI key is available."""
+    return bool(session.get('openai_api_key') or OPENAI_API_KEY_ENV)
 
 # ─────────────────────────────────────────
 # Gmail Authentication
@@ -327,7 +352,10 @@ Sender {j+1}:
     Respond with ONLY the JSON array, nothing else."""       
         try:
               
-            message = openai_client.chat.completions.create(
+            client = get_openai_client()
+            if not client:
+              return
+            message = client.chat.completions.create(
                 model="gpt-4o-mini",
                 max_tokens=1000,
                 messages=[
@@ -599,8 +627,8 @@ def scan():
     try:
         senders = scan_emails(gmail_service, months)
 
-        if use_ai and senders:
-            senders = categorize_senders_with_ai(senders)
+        if use_ai and senders and has_openai_key():
+               senders = categorize_senders_with_ai(senders)
 
         return jsonify({
             'status': 'success',
@@ -680,12 +708,26 @@ def find_unsubscribe():
 
     try:
         result = find_unsubscribe_info(gmail_service, sender_email)
+
+        # Handle case where no emails found (e.g. already deleted)
+        if result is None:
+            return jsonify({
+                'status': 'success',
+                'email': sender_email,
+                'unsubscribe': {
+                    'found': False,
+                    'url': None,
+                    'email': None
+                }
+            })
+
         return jsonify({
             'status': 'success',
             'email': sender_email,
             'unsubscribe': result
         })
     except Exception as e:
+        print(f"Unsubscribe error: {e}")
         return jsonify({
             'status': 'error',
             'message': str(e)
@@ -789,7 +831,13 @@ Provide a response in this EXACT JSON format:
 
 Respond with ONLY the JSON, nothing else."""
 
-        message = openai_client.chat.completions.create(
+        client = get_openai_client()
+        if not client:
+            return jsonify({
+                'status': 'error',
+                'message': 'No OpenAI key. Please add your API key to use this feature.'
+            })
+        message = client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=1000,
             messages=[{"role": "user", "content": prompt}]
@@ -893,8 +941,61 @@ def send_unsubscribe():
 
 
 # ─────────────────────────────────────────
+# API Key Management
+# ─────────────────────────────────────────
+
+@app.route('/set_api_key', methods=['POST'])
+def set_api_key():
+    """Save OpenAI API key to session."""
+    api_key = request.json.get('api_key', '').strip()
+
+    if not api_key:
+        return jsonify({
+            'status': 'error',
+            'message': 'No API key provided'
+        })
+
+    if not api_key.startswith('sk-'):
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid API key format'
+        })
+
+    # Test the key before saving
+    try:
+        test_client = OpenAI(api_key=api_key)
+        test_client.models.list()
+        session['openai_api_key'] = api_key
+        return jsonify({
+            'status': 'success',
+            'message': 'API key saved successfully!'
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': 'Invalid API key — could not connect to OpenAI'
+        })
+
+
+@app.route('/remove_api_key', methods=['POST'])
+def remove_api_key():
+    """Remove OpenAI API key from session."""
+    session.pop('openai_api_key', None)
+    return jsonify({'status': 'success'})
+
+
+@app.route('/check_config', methods=['GET'])
+def check_config():
+    """Check current configuration status."""
+    return jsonify({
+        'has_openai_key': has_openai_key(),
+        'ai_mode': has_openai_key()
+    })
+
+# ─────────────────────────────────────────
 # AI Inbox Chat
 # ─────────────────────────────────────────
+
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -977,7 +1078,13 @@ Respond with ONLY the JSON, nothing else."""
         # Add current question
         messages.append({"role": "user", "content": question})
 
-        message = openai_client.chat.completions.create(
+        client = get_openai_client()
+        if not client:
+            return jsonify({
+                'status': 'error',
+                'message': 'No OpenAI key. Please add your API key to use this feature.'
+            })
+        message = client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=1500,
             messages=messages

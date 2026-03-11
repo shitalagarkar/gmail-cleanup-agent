@@ -840,7 +840,7 @@
                 <span class="custom-label">Or enter custom period:</span>
                 <div class="custom-inputs">
                     <input type="number" id="customValue" min="1"
-                        placeholder="e.g. 45" oninput="selectCustom()">
+                        placeholder="e.g. 1" oninput="selectCustom()">
                     <div class="unit-toggle">
                         <button class="unit-btn active" id="unitDays" onclick="setUnit('days')">Days</button>
                         <button class="unit-btn" id="unitMonths" onclick="setUnit('months')">Months</button>
@@ -851,22 +851,27 @@
 
             <!-- AI Toggle -->
             <div class="ai-toggle-row">
-                <label class="toggle-switch">
-                    <input type="checkbox" id="aiToggle" checked>
-                    <span class="toggle-slider"></span>
-                </label>
-                <span class="ai-label">
-                    🧠 <span>AI Categorization</span> —
-                    OpenAI will analyze and categorize your emails
-                </span>
+                <div id="aiToggleWrapper">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="aiToggle" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span style="font-size:14px;color:#555">
+                                🤖 Use AI Categorization
+                            </span>
+                        </div>
+                        <div id="noKeyMessage" style="display:none;
+                            font-size:13px;color:#aaa">
+                            🔒 Add OpenAI key above to enable AI
+                        </div>
             </div>
 
             <button class="scan-btn" id="scanBtn" onclick="scanEmails()">
                 🔍 Scan My Inbox
             </button>
         </div>
-        <!-- AI Summary Card -->
-        <div class="summary-card" id="summaryCard">
+         <!-- AI Summary Card -->
+        <div class="summary-card" id="summaryCard" style="display:none">
             <div class="summary-loading" id="summaryLoading">
                 <div class="spinner" style="border-top-color:white;margin:0 auto 10px"></div>
                 <p>🧠 Generating AI insights...</p>
@@ -880,8 +885,8 @@
             </div>
         </div>
 
-        <!-- Chat Card -->
-        <div class="chat-card" id="chatCard">
+          <!-- Chat Card -->
+        <div class="chat-card" id="chatCard" style="display:none">
             <div class="chat-header">
                 <h2>💬 Ask About Your Inbox</h2>
                 <div class="privacy-toggle">
@@ -894,7 +899,7 @@
             </div>
 
             <!-- Suggested Prompts -->
-            <div class="suggested-prompts" id="suggestedPrompts">
+            <div class="suggested-prompts" id="suggestedPrompts" >
                 <span class="prompt-chip"
                     onclick="usePrompt(this)">
                     📰 Show technical newsletters
@@ -953,6 +958,105 @@
                     onclick="sendChat()">
                     Send ✈️
                 </button>
+            </div>
+        </div>
+
+
+        <!-- API Key Settings Panel -->
+        <div id="apiKeyPanel" style="
+            background: white;
+            border-radius: 12px;
+            padding: 20px 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+            display: none;">
+
+            <!-- Basic Mode Banner -->
+            <div id="basicModeBanner" style="display:none">
+                <div style="display:flex;align-items:center;
+                    justify-content:space-between;flex-wrap:wrap;gap:10px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:24px">🔒</span>
+                        <div>
+                            <div style="font-weight:600;color:#444">
+                                Basic Mode
+                            </div>
+                            <div style="font-size:12px;color:#888">
+                                Scan, delete and unsubscribe — no AI features
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="showApiKeyInput()"
+                        style="padding:8px 16px;background:#4285f4;
+                        color:white;border:none;border-radius:20px;
+                        cursor:pointer;font-size:13px;font-weight:600">
+                        🤖 Unlock AI Features
+                    </button>
+                </div>
+            </div>
+
+            <!-- AI Mode Banner -->
+            <div id="aiModeBanner" style="display:none">
+                <div style="display:flex;align-items:center;
+                    justify-content:space-between;flex-wrap:wrap;gap:10px">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span style="font-size:24px">🤖</span>
+                        <div>
+                            <div style="font-weight:600;color:#444">
+                                AI Mode Active
+                            </div>
+                            <div style="font-size:12px;color:#888">
+                                All AI features unlocked!
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="removeApiKey()"
+                        style="padding:8px 16px;background:#f5f5f5;
+                        color:#666;border:none;border-radius:20px;
+                        cursor:pointer;font-size:13px">
+                        🔒 Switch to Basic Mode
+                    </button>
+                </div>
+            </div>
+
+            <!-- API Key Input -->
+            <div id="apiKeyInput" style="display:none;margin-top:15px">
+                <div style="font-size:13px;color:#666;margin-bottom:10px">
+                    Enter your OpenAI API key to unlock AI features:
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <input type="password"
+                        id="apiKeyField"
+                        placeholder="sk-..."
+                        style="flex:1;min-width:200px;padding:10px 15px;
+                        border:2px solid #e0e0e0;border-radius:25px;
+                        font-size:14px;outline:none">
+                    <button onclick="saveApiKey()"
+                        style="padding:10px 20px;background:#34a853;
+                        color:white;border:none;border-radius:25px;
+                        cursor:pointer;font-size:14px;font-weight:600">
+                        ✅ Save Key
+                    </button>
+                    <button onclick="hideApiKeyInput()"
+                        style="padding:10px 20px;background:#f5f5f5;
+                        color:#666;border:none;border-radius:25px;
+                        cursor:pointer;font-size:14px">
+                        Cancel
+                    </button>
+                </div>
+                <div style="font-size:11px;color:#aaa;margin-top:8px">
+                    🔒 Key stored in session only — never saved to any server.
+                    Get your key at
+                    <a href="https://platform.openai.com/api-keys"
+                        target="_blank"
+                        style="color:#4285f4">
+                        platform.openai.com
+                    </a>
+                </div>
+                <div id="apiKeyError"
+                    style="color:#ea4335;font-size:13px;
+                    margin-top:8px;display:none">
+                </div>
             </div>
         </div>
 
@@ -1208,12 +1312,13 @@
             renderSenderList(senders);
             populateNeverRead(senders);
 
-            // Show chat card
-            document.getElementById('chatCard').style.display = 'block'
-
             // Generate AI summary if AI was enabled
-            if (aiEnabled) {
-                generateSummary(senders)
+            // Show chat + summary only if AI key exists
+            if (hasApiKey) {
+                document.getElementById('chatCard').style.display = 'block'
+                if (aiEnabled) {
+                    generateSummary(senders)
+                }
             }
         }
 
@@ -1483,6 +1588,131 @@
             setTimeout(() => { alert.style.display = 'none'; }, 6000);
         }
 
+
+        // ─────────────────────────────────────
+        // API Key Management
+        // ─────────────────────────────────────
+        let hasApiKey = false
+
+        async function checkConfig() {
+            try {
+                const response = await fetch('/check_config')
+                const data = await response.json()
+                hasApiKey = data.has_openai_key
+                updateApiKeyUI()
+            } catch (error) {
+                console.error('Config check error:', error)
+            }
+        }
+
+        function updateApiKeyUI() {
+            const apiKeyPanel = document.getElementById('apiKeyPanel')
+            const basicModeBanner = document.getElementById('basicModeBanner')
+            const aiModeBanner = document.getElementById('aiModeBanner')
+            const aiToggleWrapper = document.getElementById('aiToggleWrapper')
+            const noKeyMessage = document.getElementById('noKeyMessage')
+            const aiToggle = document.getElementById('aiToggle')
+
+            // Always show panel
+            apiKeyPanel.style.display = 'block'
+
+            if (hasApiKey) {
+                // AI Mode
+                basicModeBanner.style.display = 'none'
+                aiModeBanner.style.display = 'block'
+                aiToggleWrapper.style.display = 'flex'
+                noKeyMessage.style.display = 'none'
+                aiToggle.disabled = false
+
+                // Show chat card if already scanned
+                if (sendersData && sendersData.length > 0) {
+                    document.getElementById('chatCard').style.display = 'block'
+                }
+            } else {
+                // Basic Mode — hide all AI sections
+                basicModeBanner.style.display = 'block'
+                aiModeBanner.style.display = 'none'
+                aiToggleWrapper.style.display = 'none'
+                noKeyMessage.style.display = 'block'
+                aiToggle.checked = false
+                aiToggle.disabled = true
+
+                // Hide AI cards immediately
+                chatCard.style.display = 'none'
+            }  
+        }
+
+        function showApiKeyInput() {
+            document.getElementById('apiKeyInput').style.display = 'block'
+            document.getElementById('apiKeyField').focus()
+        }
+
+        function hideApiKeyInput() {
+            document.getElementById('apiKeyInput').style.display = 'none'
+            document.getElementById('apiKeyField').value = ''
+            document.getElementById('apiKeyError').style.display = 'none'
+        }
+
+        async function saveApiKey() {
+            const keyField = document.getElementById('apiKeyField')
+            const errorDiv = document.getElementById('apiKeyError')
+            const key = keyField.value.trim()
+
+            if (!key) {
+                errorDiv.textContent = 'Please enter an API key'
+                errorDiv.style.display = 'block'
+                return
+            }
+
+            // Show loading state
+            const saveBtn = event.target
+            saveBtn.textContent = '⏳ Verifying...'
+            saveBtn.disabled = true
+            errorDiv.style.display = 'none'
+
+            try {
+                const response = await fetch('/set_api_key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ api_key: key })
+                })
+
+                const data = await response.json()
+
+                if (data.status === 'success') {
+                    hasApiKey = true
+                    hideApiKeyInput()
+                    updateApiKeyUI()
+
+                    // If already scanned, show chat card immediately
+                    if (sendersData && sendersData.length > 0) {
+                        document.getElementById('chatCard').style.display = 'block'
+                    }
+                } else {
+                    errorDiv.textContent = data.message
+                    errorDiv.style.display = 'block'
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error connecting to server'
+                errorDiv.style.display = 'block'
+            } finally {
+                saveBtn.textContent = '✅ Save Key'
+                saveBtn.disabled = false
+            }
+        }
+
+         async function removeApiKey() {
+            await fetch('/remove_api_key', { method: 'POST' })
+            hasApiKey = false
+            updateApiKeyUI()
+
+            // Hide AI sections immediately
+            document.getElementById('chatCard').style.display = 'none'
+            document.getElementById('summaryCard').style.display = 'none'
+        }
+
+        // Check config on page load
+        checkConfig()
 // ─────────────────────────────────────
         // Delete Mode Toggle
         // ─────────────────────────────────────
@@ -1592,7 +1822,15 @@
                 if (data.status === 'success') {
                     const unsub = data.unsubscribe
 
-                    if (unsub.found) {
+                    if (data.status === 'success') {
+                    const unsub = data.unsubscribe
+                    if (!unsub || !unsub.found) {
+                        // No emails found or already deleted
+                        findBtn.textContent = '❌ Not Found'
+                        findBtn.disabled = true
+                        status.textContent = 'No emails found — may have been deleted'
+                        status.className = 'unsub-status error'
+                    } else if (unsub.found) {
                         // Remove find button
                         findBtn.remove()
 
@@ -1629,7 +1867,14 @@
                         status.textContent = 'No unsubscribe link found in latest email'
                         status.className = 'unsub-status error'
                     }
+                } else {
+                    // Server error
+                    findBtn.textContent = '❌ Error'
+                    findBtn.disabled = true
+                    status.textContent = data.message || 'Something went wrong'
+                    status.className = 'unsub-status error'
                 }
+            }
             } catch (error) {
                 findBtn.textContent = '🔍 Find Link'
                 findBtn.disabled = false
