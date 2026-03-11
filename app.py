@@ -1,11 +1,12 @@
 import os
 import pickle
+import json
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from datetime import date, datetime, timedelta
 from collections import defaultdict
-from flask import Flask, request, jsonify, render_template, session
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from flask_session import Session
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -16,9 +17,20 @@ load_dotenv()
 # Flask app
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = False
-Session(app)
+
+# Global Gmail service for local use
+gmail_service = None
+
+if not os.getenv('RENDER'):
+    # Local — use filesystem sessions
+    app.config['SESSION_TYPE'] = 'filesystem'
+    app.config['SESSION_PERMANENT'] = False
+    app.config['SESSION_FILE_DIR'] = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'flask_session'
+    )
+    Session(app)
+# On Render — Flask default cookie sessions (no disk needed)
 
 # Gmail service global variable
 gmail_service = None
@@ -57,30 +69,71 @@ def has_openai_key():
 
 def get_gmail_service():
     """
-    Handles Gmail authentication.
-    Opens browser for login first time.
-    Saves token for subsequent runs.
+    Returns Gmail API service.
+    Local: uses token.pickle
+    Render: uses session token
     """
+    SCOPES = [
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://mail.google.com/'
+    ]
+
     creds = None
 
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
+    # On Render — use session token
+    if os.getenv('RENDER'):
+        token_data = session.get('gmail_token')
+        if not token_data:
+            return None
+        try:
+            creds = Credentials.from_authorized_user_info(
+                token_data, SCOPES
+            )
+        except Exception as e:
+            print(f"Error loading session credentials: {e}")
+            return None
 
-    if not creds or not creds.valid:
+        # Refresh if expired
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
+            try:
+                creds.refresh(Request())
+                session['gmail_token'] = json.loads(creds.to_json())
+            except Exception as e:
+                print(f"Error refreshing credentials: {e}")
+                return None
 
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+    else:
+        # Local — use token.pickle
+        if os.path.exists('token.pickle'):
+            with open('token.pickle', 'rb') as token:
+                creds = pickle.load(token)
 
-    service = build('gmail', 'v1', credentials=creds)
-    return service
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+                if credentials_json:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(
+                        mode='w', suffix='.json', delete=False
+                    ) as f:
+                        f.write(credentials_json)
+                        temp_path = f.name
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        temp_path, SCOPES
+                    )
+                    os.unlink(temp_path)
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        'credentials.json', SCOPES
+                    )
+                creds = flow.run_local_server(port=0)
 
+            with open('token.pickle', 'wb') as token:
+                pickle.dump(creds, token)
+
+    return build('gmail', 'v1', credentials=creds)
 
 # ─────────────────────────────────────────
 # Date Filter
@@ -610,6 +663,9 @@ def get_email_body(msg):
 @app.route('/')
 def index():
     """Main page"""
+    # If running on Render and not authenticated, show login
+    if os.getenv('RENDER') and not session.get('gmail_authenticated'):
+        return render_template('login.html')
     return render_template('index.html')
 
 
@@ -619,6 +675,14 @@ def scan():
     Scans Gmail and returns sender list as JSON.
     """
     global gmail_service
+    # On Render, get service from session token
+    if os.getenv('RENDER'):
+        if not session.get('gmail_authenticated'):
+            return jsonify({
+                'status': 'error',
+                'message': 'Not authenticated. Please login first.'
+            })
+        gmail_service = get_gmail_service()
     months = float(request.json.get('months', 6))
     use_ai = request.json.get('use_ai', True)
 
@@ -648,6 +712,14 @@ def delete():
     Deletes emails from selected senders.
     """
     global gmail_service
+    # On Render, get service from session token
+    if os.getenv('RENDER'):
+        if not session.get('gmail_authenticated'):
+            return jsonify({
+                'status': 'error',
+                'message': 'Not authenticated. Please login first.'
+            })
+        gmail_service = get_gmail_service()
 
     selected_emails = request.json.get('emails', [])
     months = float(request.json.get('months', 6))
@@ -697,6 +769,14 @@ def find_unsubscribe():
     Called when user clicks Find Link button.
     """
     global gmail_service
+    # On Render, get service from session token
+    if os.getenv('RENDER'):
+        if not session.get('gmail_authenticated'):
+            return jsonify({
+                'status': 'error',
+                'message': 'Not authenticated. Please login first.'
+            })
+        gmail_service = get_gmail_service()
 
     sender_email = request.json.get('email')
 
@@ -880,6 +960,14 @@ def send_unsubscribe():
     Called when user approves email unsubscribe.
     """
     global gmail_service
+    # On Render, get service from session token
+    if os.getenv('RENDER'):
+        if not session.get('gmail_authenticated'):
+            return jsonify({
+                'status': 'error',
+                'message': 'Not authenticated. Please login first.'
+            })
+        gmail_service = get_gmail_service()
 
     unsubscribe_email = request.json.get('unsubscribe_email')
     sender_name = request.json.get('sender_name', 'this sender')
@@ -939,6 +1027,123 @@ def send_unsubscribe():
             'message': str(e)
         })
 
+
+# ─────────────────────────────────────────
+# Gmail OAuth Web Flow (for Render hosting)
+# ─────────────────────────────────────────
+
+@app.route('/auth/login')
+def auth_login():
+    """Starts Gmail OAuth flow for hosted version."""
+    SCOPES = [
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://mail.google.com/'
+    ]
+
+    credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+    if not credentials_json:
+        return jsonify({
+            'status': 'error',
+            'message': 'Google credentials not configured on server'
+        })
+
+    try:
+        import tempfile
+        import google_auth_oauthlib.flow as oauth_flow
+
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.json', delete=False
+        ) as f:
+            f.write(credentials_json)
+            temp_path = f.name
+
+        flow = oauth_flow.Flow.from_client_secrets_file(
+            temp_path,
+            scopes=SCOPES,
+            redirect_uri=url_for('auth_callback', _external=True)
+        )
+        os.unlink(temp_path)
+
+        auth_url, state = flow.authorization_url(
+            access_type='offline',
+            include_granted_scopes='true'
+        )
+
+        session['oauth_state'] = state
+        return redirect(auth_url)
+
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        })
+
+
+@app.route('/auth/callback')
+def auth_callback():
+    """Handles Gmail OAuth callback."""
+    SCOPES = [
+        'https://www.googleapis.com/auth/gmail.modify',
+        'https://mail.google.com/'
+    ]
+
+    credentials_json = os.getenv('GOOGLE_CREDENTIALS')
+
+    try:
+        import tempfile
+        import google_auth_oauthlib.flow as oauth_flow
+
+        with tempfile.NamedTemporaryFile(
+            mode='w', suffix='.json', delete=False
+        ) as f:
+            f.write(credentials_json)
+            temp_path = f.name
+
+        flow = oauth_flow.Flow.from_client_secrets_file(
+            temp_path,
+            scopes=SCOPES,
+            redirect_uri=url_for('auth_callback', _external=True)
+        )
+        os.unlink(temp_path)
+
+        flow.fetch_token(authorization_response=request.url)
+        creds = flow.credentials
+
+        # Save token to session
+        session['gmail_token'] = json.loads(creds.to_json())
+        session['gmail_authenticated'] = True
+
+        # Get user email
+        try:
+            service = build('gmail', 'v1', credentials=creds)
+            profile = service.users().getProfile(userId='me').execute()
+            session['gmail_email'] = profile.get('emailAddress', '')
+        except Exception:
+            session['gmail_email'] = ''
+
+        return redirect('/')
+
+    except Exception as e:
+        print(f"Auth callback error: {e}")
+        return redirect('/?error=auth_failed')
+
+
+@app.route('/auth/status')
+def auth_status():
+    """Check if user is authenticated with Gmail."""
+    return jsonify({
+        'authenticated': session.get('gmail_authenticated', False),
+        'email': session.get('gmail_email', '')
+    })
+
+
+@app.route('/auth/logout')
+def auth_logout():
+    """Log out — clear Gmail session."""
+    session.pop('gmail_token', None)
+    session.pop('gmail_authenticated', None)
+    session.pop('gmail_email', None)
+    return redirect('/')
 
 # ─────────────────────────────────────────
 # API Key Management
@@ -1122,11 +1327,12 @@ Respond with ONLY the JSON, nothing else."""
 # ─────────────────────────────────────────
 # Start the app
 # ─────────────────────────────────────────
-
 if __name__ == '__main__':
-    print("Connecting to Gmail...")
-    gmail_service = get_gmail_service()
-    print("Successfully connected to Gmail! ✅")
+    print("Starting Gmail Cleanup Agent...")
+    if not os.getenv('RENDER'):
+        # Local — pre-authenticate Gmail
+        gmail_service = get_gmail_service()
+        print("Successfully connected to Gmail! ✅")
     print("Starting web server...")
     print("Open your browser and go to: http://127.0.0.1:5000")
     app.run(host='127.0.0.1', port=5000, debug=True, use_reloader=False)
