@@ -1,0 +1,2074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gmail Cleanup Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f4f8;
+            color: #333;
+        }
+
+        .header {
+            background: #4285f4;
+            color: white;
+            padding: 20px 40px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 { font-size: 24px; font-weight: 600; }
+
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+        }
+
+        .card h2 { font-size: 16px; margin-bottom: 15px; color: #444; }
+
+        /* Time Period */
+        .time-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .time-btn {
+            padding: 8px 20px;
+            border: 2px solid #4285f4;
+            background: white;
+            color: #4285f4;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .time-btn:hover { background: #e8f0fe; }
+        .time-btn.active { background: #4285f4; color: white; }
+
+        /* Custom Period */
+        .custom-period {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #e0e0e0;
+        }
+
+        .custom-label {
+            font-size: 13px;
+            color: #888;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .custom-inputs { display: flex; align-items: center; gap: 10px; }
+
+        .custom-inputs input {
+            width: 100px;
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .custom-inputs input:focus { border-color: #4285f4; }
+
+        .unit-toggle {
+            display: flex;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .unit-btn {
+            padding: 7px 16px;
+            border: none;
+            background: white;
+            color: #888;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .unit-btn.active { background: #4285f4; color: white; }
+
+        .period-preview {
+            display: block;
+            margin-top: 8px;
+            font-size: 13px;
+            color: #4285f4;
+            font-weight: 500;
+            min-height: 20px;
+        }
+
+        /* AI Toggle */
+        .ai-toggle-row {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px dashed #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: #ccc;
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        input:checked + .toggle-slider { background: #4285f4; }
+        input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+        .ai-label { font-size: 14px; color: #555; }
+        .ai-label span { color: #4285f4; font-weight: 600; }
+
+        /* Scan Button */
+        .scan-btn {
+            margin-top: 20px;
+            padding: 10px 30px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .scan-btn:hover { background: #3367d6; }
+        .scan-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+        /* Loading */
+        .loading { display: none; text-align: center; padding: 30px; color: #666; }
+
+        .spinner {
+            width: 36px; height: 36px;
+            border: 4px solid #e0e0e0;
+            border-top: 4px solid #4285f4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Filter Bar */
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .filter-btn {
+            padding: 5px 14px;
+            border: 1.5px solid #e0e0e0;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .filter-btn:hover { border-color: #4285f4; color: #4285f4; }
+        .filter-btn.active { background: #4285f4; color: white; border-color: #4285f4; }
+
+        /* Results Header */
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .badge {
+            background: #e8f0fe;
+            color: #4285f4;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        /* Action Bar */
+        .action-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+
+        .select-all-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            cursor: pointer;
+        }
+
+        .delete-btn {
+            padding: 8px 24px;
+            background: #ea4335;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: none;
+        }
+
+        .delete-btn:hover { background: #c62828; }
+        .delete-btn:disabled { background: #aaa; cursor: not-allowed; }
+
+        .selected-info {
+            font-size: 12px;
+            color: #888;
+            display: none;
+            margin-top: 4px;
+        }
+
+        .selected-info span { color: #ea4335; font-weight: 600; }
+
+        /* Sender List */
+        .sender-list {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+        }
+
+        .sender-list::-webkit-scrollbar { width: 6px; }
+        .sender-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .sender-list::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 10px; }
+        .sender-list::-webkit-scrollbar-thumb:hover { background: #999; }
+
+        /* Sender Row */
+        .sender-row {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #f5f5f5;
+            transition: background 0.15s;
+            cursor: pointer;
+            gap: 12px;
+        }
+
+        .sender-row:last-child { border-bottom: none; }
+        .sender-row:hover { background: #f8f9ff; }
+        .sender-row.selected { background: #e8f0fe; }
+
+        input[type="checkbox"] {
+            width: 17px; height: 17px;
+            cursor: pointer;
+            accent-color: #4285f4;
+            flex-shrink: 0;
+        }
+
+        .sender-info { flex: 1; min-width: 0; }
+
+        .sender-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sender-email {
+            font-size: 12px;
+            color: #999;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .sender-meta {
+            display: flex;
+            gap: 6px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+
+        /* Category Badge */
+        .category-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .cat-Newsletter { background: #e3f2fd; color: #1565c0; }
+        .cat-Promotional { background: #fff3e0; color: #e65100; }
+        .cat-Notification { background: #f3e5f5; color: #6a1b9a; }
+        .cat-Personal { background: #e8f5e9; color: #2e7d32; }
+        .cat-Work { background: #e8eaf6; color: #283593; }
+        .cat-Social { background: #fce4ec; color: #880e4f; }
+        .cat-Spam { background: #ffebee; color: #b71c1c; }
+        .cat-Other { background: #f5f5f5; color: #616161; }
+
+        /* Safety Badge */
+        .safety-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        .safety-safe { background: #ffebee; color: #c62828; }
+        .safety-review { background: #fff8e1; color: #f57f17; }
+        .safety-keep { background: #e8f5e9; color: #2e7d32; }
+
+        /* Never Read Badge */
+        .never-read-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: #fce8e6;
+            color: #c62828;
+            font-weight: 500;
+        }
+
+        /* Count Pill */
+        .count-pill {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 12px;
+            background: #fff3e0;
+            color: #e65100;
+            flex-shrink: 0;
+        }
+
+        .count-pill.high { background: #fce8e6; color: #c62828; }
+
+        /* Alert */
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .alert.success { background: #e6f4ea; color: #2e7d32; border-left: 4px solid #2e7d32; }
+        .alert.error { background: #fce8e6; color: #c62828; border-left: 4px solid #c62828; }
+
+        /* Empty State */
+        .empty-state { text-align: center; padding: 50px 20px; color: #999; }
+        .empty-state .icon { font-size: 50px; margin-bottom: 12px; }
+        .empty-state p { font-size: 15px; }
+
+
+/* AI Summary Card */
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            color: white;
+            display: none;
+        }
+
+        .summary-headline {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            line-height: 1.4;
+        }
+
+        .summary-stats {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-box {
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 12px 18px;
+            text-align: center;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .stat-number {
+            font-size: 28px;
+            font-weight: 700;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.85;
+            margin-top: 4px;
+        }
+
+        .summary-section {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 12px;
+        }
+
+        .summary-section h3 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            opacity: 0.8;
+            margin-bottom: 10px;
+        }
+
+        .summary-section ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .summary-section ul li {
+            font-size: 14px;
+            padding: 4px 0;
+            opacity: 0.95;
+        }
+
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .recommendation-item:last-child {
+            border-bottom: none;
+        }
+
+        .rec-impact {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .rec-high { background: #ff6b6b; }
+        .rec-medium { background: #ffd93d; color: #333; }
+        .rec-low { background: #6bcb77; }
+
+        .warning-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            padding: 4px 0;
+        }
+
+        .summary-loading {
+            text-align: center;
+            padding: 20px;
+            color: white;
+            opacity: 0.8;
+            display: none;
+        }
+
+        /* Chat Interface */
+        .chat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+            display: none;
+        }
+
+        .chat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .chat-header h2 {
+            font-size: 16px;
+            color: #444;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .privacy-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        /* Suggested Prompts */
+        .suggested-prompts {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+
+        .prompt-chip {
+            padding: 6px 14px;
+            background: #f0f4ff;
+            color: #4285f4;
+            border: 1px solid #d0e0ff;
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .prompt-chip:hover {
+            background: #4285f4;
+            color: white;
+            border-color: #4285f4;
+        }
+
+        /* Chat Messages */
+        .chat-messages {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .chat-messages::-webkit-scrollbar { width: 6px; }
+        .chat-messages::-webkit-scrollbar-track { background: #f1f1f1; }
+        .chat-messages::-webkit-scrollbar-thumb { background: #c0c0c0; border-radius: 10px; }
+
+        .chat-message {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .chat-message.user {
+            align-items: flex-end;
+        }
+
+        .chat-message.assistant {
+            align-items: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 85%;
+            padding: 10px 15px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .user .message-bubble {
+            background: #4285f4;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .assistant .message-bubble {
+            background: #f8f9fa;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+
+        /* Matched Senders in Chat */
+        .matched-senders {
+            margin-top: 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            max-width: 85%;
+        }
+
+        .matched-sender-row {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0f0f0;
+            gap: 10px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .matched-sender-row:last-child {
+            border-bottom: none;
+        }
+
+        .matched-sender-row:hover { background: #f8f9ff; }
+        .matched-sender-row.selected { background: #e8f0fe; }
+
+        .matched-reason {
+            font-size: 11px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .chat-delete-btn {
+            margin-top: 8px;
+            padding: 7px 18px;
+            background: #ea4335;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: none;
+            transition: all 0.2s;
+        }
+
+        .chat-delete-btn:hover { background: #c62828; }
+
+        /* Chat Input */
+        .chat-input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border 0.2s;
+        }
+
+        .chat-input:focus { border-color: #4285f4; }
+
+        .chat-send-btn {
+            padding: 10px 20px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .chat-send-btn:hover { background: #3367d6; }
+        .chat-send-btn:disabled { background: #aaa; cursor: not-allowed; }
+/* Tabs */
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 0;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            color: #888;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover { color: #4285f4; }
+
+        .tab-btn.active {
+            color: #4285f4;
+            border-bottom-color: #4285f4;
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Never Read */
+        .unsubscribe-row {
+            display: flex;
+            align-items: center;
+            padding: 14px 15px;
+            border-bottom: 1px solid #f5f5f5;
+            gap: 12px;
+        }
+
+        .unsubscribe-row:last-child { border-bottom: none; }
+        .unsubscribe-row:hover { background: #f8f9ff; }
+
+        .unsub-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .unsub-btn {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .unsub-btn-link {
+            background: #e8f0fe;
+            color: #4285f4;
+        }
+
+        .unsub-btn-link:hover { background: #d2e3fc; }
+
+        .unsub-btn-email {
+            background: #e6f4ea;
+            color: #2e7d32;
+        }
+
+        .unsub-btn-email:hover { background: #ceead6; }
+
+        .unsub-btn-find {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .unsub-btn-find:hover { background: #ffe0b2; }
+
+        .unsub-status {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .unsub-status.success { color: #2e7d32; }
+        .unsub-status.error { color: #c62828; }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 12px;
+        }
+
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <span>📧</span>
+        <h1>Gmail Cleanup Agent</h1>
+    </div>
+
+    <div class="container">
+
+        <!-- Time Period + Scan -->
+        <div class="card">
+            <h2>🗓️ Select Time Period</h2>
+
+            <div class="time-buttons">
+                <button class="time-btn active" onclick="selectPreset(this, 6, 'months')">Last 6 Months</button>
+                <button class="time-btn" onclick="selectPreset(this, 12, 'months')">Last 1 Year</button>
+                <button class="time-btn" onclick="selectPreset(this, 24, 'months')">Last 2 Years</button>
+                <button class="time-btn" onclick="selectPreset(this, 60, 'months')">Last 5 Years</button>
+            </div>
+
+            <div class="custom-period">
+                <span class="custom-label">Or enter custom period:</span>
+                <div class="custom-inputs">
+                    <input type="number" id="customValue" min="1"
+                        placeholder="e.g. 45" oninput="selectCustom()">
+                    <div class="unit-toggle">
+                        <button class="unit-btn active" id="unitDays" onclick="setUnit('days')">Days</button>
+                        <button class="unit-btn" id="unitMonths" onclick="setUnit('months')">Months</button>
+                    </div>
+                </div>
+                <span class="period-preview" id="periodPreview"></span>
+            </div>
+
+            <!-- AI Toggle -->
+            <div class="ai-toggle-row">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="aiToggle" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+                <span class="ai-label">
+                    🧠 <span>AI Categorization</span> —
+                    OpenAI will analyze and categorize your emails
+                </span>
+            </div>
+
+            <button class="scan-btn" id="scanBtn" onclick="scanEmails()">
+                🔍 Scan My Inbox
+            </button>
+        </div>
+        <!-- AI Summary Card -->
+        <div class="summary-card" id="summaryCard">
+            <div class="summary-loading" id="summaryLoading">
+                <div class="spinner" style="border-top-color:white;margin:0 auto 10px"></div>
+                <p>🧠 Generating AI insights...</p>
+            </div>
+            <div id="summaryContent" style="display:none">
+                <div class="summary-headline" id="summaryHeadline"></div>
+                <div class="summary-stats" id="summaryStats"></div>
+                <div id="summaryInsights"></div>
+                <div id="summaryRecommendations"></div>
+                <div id="summaryWarnings"></div>
+            </div>
+        </div>
+
+        <!-- Chat Card -->
+        <div class="chat-card" id="chatCard">
+            <div class="chat-header">
+                <h2>💬 Ask About Your Inbox</h2>
+                <div class="privacy-toggle">
+                    <label class="toggle-switch" style="width:36px;height:20px">
+                        <input type="checkbox" id="privacyToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                    <span>🔒 Privacy Mode</span>
+                </div>
+            </div>
+
+            <!-- Suggested Prompts -->
+            <div class="suggested-prompts" id="suggestedPrompts">
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    📰 Show technical newsletters
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    🛍️ Show all promotional senders
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    📭 Who should I unsubscribe from?
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    ⚠️ What should I NOT delete?
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    📊 What's my inbox health score?
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    🇮🇳 Show Indian startup newsletters
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    💼 Show work related emails
+                </span>
+                <span class="prompt-chip"
+                    onclick="usePrompt(this)">
+                    🔝 Who emails me the most?
+                </span>
+            </div>
+
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-message assistant">
+                    <div class="message-bubble">
+                        👋 Hi! I've analyzed your inbox.
+                        Ask me anything — like
+                        "show me technical newsletters"
+                        or "what should I delete first?"
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <div class="chat-input-row">
+                <input type="text"
+                    class="chat-input"
+                    id="chatInput"
+                    placeholder="Ask about your inbox..."
+                    onkeypress="if(event.key==='Enter') sendChat()">
+                <button class="chat-send-btn"
+                    id="chatSendBtn"
+                    onclick="sendChat()">
+                    Send ✈️
+                </button>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p id="loadingText">Scanning your inbox...</p>
+            <p style="font-size:12px;color:#aaa;margin-top:6px;">
+                This may take a few minutes
+            </p>
+        </div>
+
+        <!-- Results -->
+        <!-- Results -->
+        <div class="card" id="resultsCard" style="display:none">
+
+            <div class="results-header">
+                <h2>📊 Scan Results</h2>
+                <span class="badge" id="totalBadge">0 senders found</span>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active"
+                    onclick="switchTab('allSenders', this)">
+                    📧 All Senders
+                </button>
+                <button class="tab-btn"
+                    onclick="switchTab('neverRead', this)">
+                    📭 Never Read
+                    <span class="badge" id="neverReadBadge"
+                        style="margin-left:5px;display:none">0</span>
+                </button>
+            </div>
+
+            <!-- All Senders Tab -->
+            <div class="tab-content active" id="allSenders">
+
+            <!-- Legend -->
+            <div class="legend" id="aiLegend" style="display:none">
+                <span style="font-weight:600;color:#555">Safety: </span>
+                <div class="legend-item">
+                    <span class="safety-badge safety-safe">🔴 Safe</span>
+                    <span>Safe to delete</span>
+                </div>
+                <div class="legend-item">
+                    <span class="safety-badge safety-review">🟡 Review</span>
+                    <span>Check before deleting</span>
+                </div>
+                <div class="legend-item">
+                    <span class="safety-badge safety-keep">🟢 Keep</span>
+                    <span>Important — keep!</span>
+                </div>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="filter-bar" id="filterBar" style="display:none">
+                <button class="filter-btn active" onclick="filterSenders('all', this)">All</button>
+                <button class="filter-btn" onclick="filterSenders('safe', this)">🔴 Safe to Delete</button>
+                <button class="filter-btn" onclick="filterSenders('review', this)">🟡 Review</button>
+                <button class="filter-btn" onclick="filterSenders('keep', this)">🟢 Keep</button>
+                <button class="filter-btn" onclick="filterSenders('never_read', this)">📭 Never Read</button>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <div>
+                    <div class="select-all-row">
+                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                        <label for="selectAll" style="cursor:pointer">Select All</label>
+                    </div>
+                    <div class="selected-info" id="selectedInfo">
+                        <span id="selectedCount">0</span> sender(s) ·
+                        <span id="selectedEmailCount">0</span> emails will be deleted
+                    </div>
+                </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+                    <button class="delete-btn" id="deleteBtn" onclick="confirmDelete()">
+                        🗑️ Delete Selected
+                    </button>
+
+                    <!-- Delete All Time -->
+                    <label style="display:flex;align-items:center;gap:6px;
+                        font-size:12px;color:#888;cursor:pointer">
+                        <input type="checkbox" id="deleteAllTime"
+                            onchange="toggleDeleteMode('all')"
+                            style="width:14px;height:14px;accent-color:#ea4335">
+                        Delete ALL emails ever
+                    </label>
+
+                    <!-- Keep Recent -->
+                    <label style="display:flex;align-items:center;gap:6px;
+                        font-size:12px;color:#888;cursor:pointer">
+                        <input type="checkbox" id="keepRecentCheck"
+                            onchange="toggleDeleteMode('recent')"
+                            style="width:14px;height:14px;accent-color:#ea4335">
+                        Keep recent
+                        <input type="number" id="keepRecentValue"
+                            min="1" value="3" disabled
+                            style="width:45px;padding:2px 6px;
+                            border:1px solid #e0e0e0;border-radius:6px;
+                            font-size:12px;text-align:center">
+                        <select id="keepRecentUnit" disabled
+                            style="padding:2px 6px;border:1px solid #e0e0e0;
+                            border-radius:6px;font-size:12px;color:#555">
+                            <option value="months">Months</option>
+                            <option value="days">Days</option>
+                        </select>
+                        — delete older
+                    </label>
+                </div>
+            </div>
+
+            <!-- Sender List -->
+            <div class="sender-list" id="senderList"></div>
+
+           <!-- Alert -->
+                <div class="alert" id="deleteAlert"></div>
+
+            </div>
+            <!-- End All Senders Tab -->
+
+            <!-- Never Read Tab -->
+            <div class="tab-content" id="neverRead">
+                <p style="font-size:13px;color:#888;margin-bottom:15px">
+                    These senders have <strong>never been read</strong>.
+                    Find and click unsubscribe links or send unsubscribe emails.
+                </p>
+
+                <!-- Never Read List -->
+                <div class="sender-list" id="neverReadList">
+                    <div style="text-align:center;padding:40px;color:#999">
+                        Run a scan to see never-read senders
+                    </div>
+                </div>
+
+            </div>
+            <!-- End Never Read Tab -->
+
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState">
+            <div class="icon">📭</div>
+            <p>Select a time period and click <strong>Scan My Inbox</strong> to get started!</p>
+        </div>
+
+    </div>
+
+    <script>
+        let selectedMonths = 6;
+        let selectedUnit = 'days';
+        let selectedDays = null;
+        let sendersData = [];
+        let filteredData = [];
+        let selectedEmails = new Set();
+        let emailCounts = {};
+
+        // ─────────────────────────────────────
+        // Time Period
+        // ─────────────────────────────────────
+        function selectPreset(btn, value, unit) {
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('customValue').value = '';
+            document.getElementById('periodPreview').textContent = '';
+            selectedMonths = value;
+        }
+
+        function selectCustom() {
+            const value = parseInt(document.getElementById('customValue').value);
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            if (!value || value < 1) {
+                document.getElementById('periodPreview').textContent = '';
+                selectedMonths = 6;
+                return;
+            }
+            if (selectedUnit === 'days') {
+                // Store exact days value with special flag
+                selectedMonths = value / 30;
+                selectedDays = value;  // Store actual days
+                document.getElementById('periodPreview').textContent =
+                    `📅 Scanning last ${value} days`;
+            } else {
+                selectedMonths = value;
+                selectedDays = null;
+                document.getElementById('periodPreview').textContent =
+                    `📅 Scanning last ${value} months (≈ ${(value/12).toFixed(1)} years)`;
+            }
+        }
+
+        function setUnit(unit) {
+            selectedUnit = unit;
+            document.getElementById('unitDays').classList.toggle('active', unit === 'days');
+            document.getElementById('unitMonths').classList.toggle('active', unit === 'months');
+            const value = document.getElementById('customValue').value;
+            if (value) selectCustom();
+        }
+
+        // ─────────────────────────────────────
+        // Scan
+        // ─────────────────────────────────────
+        async function scanEmails() {
+            const useAi = document.getElementById('aiToggle').checked;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultsCard').style.display = 'none';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('scanBtn').disabled = true;
+            document.getElementById('loadingText').textContent = useAi
+                ? 'Scanning inbox and running AI categorization...'
+                : 'Scanning your inbox...';
+
+            try {
+                const response = await fetch('/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        months: selectedDays ? selectedDays / 30 : selectedMonths,
+                        use_ai: useAi
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    sendersData = data.senders;
+                    displayResults(data.senders, data.total, useAi);
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            } catch (error) {
+                alert('Something went wrong: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('scanBtn').disabled = false;
+            }
+        }
+
+        // ─────────────────────────────────────
+        // Display Results
+        // ─────────────────────────────────────
+        function displayResults(senders, total, aiEnabled) {
+            document.getElementById('totalBadge').textContent = `${total} senders found`;
+            document.getElementById('resultsCard').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+
+            // Show AI legend and filters if AI was used
+            document.getElementById('aiLegend').style.display = aiEnabled ? 'flex' : 'none';
+            document.getElementById('filterBar').style.display = aiEnabled ? 'flex' : 'none';
+
+            filteredData = senders;
+            renderSenderList(senders);
+            populateNeverRead(senders);
+
+            // Show chat card
+            document.getElementById('chatCard').style.display = 'block'
+
+            // Generate AI summary if AI was enabled
+            if (aiEnabled) {
+                generateSummary(senders)
+            }
+        }
+
+        function renderSenderList(senders) {
+            const list = document.getElementById('senderList');
+            list.innerHTML = '';
+            selectedEmails.clear();
+            emailCounts = {};
+            updateActionBar();
+
+            senders.forEach(sender => {
+                emailCounts[sender.email] = sender.count;
+
+                const row = document.createElement('div');
+                row.className = 'sender-row';
+                row.id = `row-${btoa(unescape(encodeURIComponent(sender.email))).replace(/=/g, '')}`;
+                row.onclick = () => toggleRow(sender.email);
+
+                const countClass = sender.count >= 20 ? 'high' : '';
+
+                // Build badges
+                let badges = '';
+                if (sender.category) {
+                    badges += `<span class="category-badge cat-${sender.category}">${getCategoryEmoji(sender.category)} ${sender.category}</span>`;
+                }
+                if (sender.safety) {
+                    badges += `<span class="safety-badge safety-${sender.safety}">${getSafetyLabel(sender.safety)}</span>`;
+                }
+                if (sender.never_read) {
+                    badges += `<span class="never-read-badge">📭 Never Read</span>`;
+                }
+
+                const emailId = btoa(unescape(encodeURIComponent(sender.email))).replace(/=/g, '');
+
+                row.innerHTML = `
+                    <input type="checkbox"
+                        id="cb-${emailId}"
+                        value="${escapeHtml(sender.email)}"
+                        onclick="event.stopPropagation(); toggleSender('${escapeHtml(sender.email)}')">
+                    <div class="sender-info">
+                        <div class="sender-name">${escapeHtml(sender.name)}</div>
+                        <div class="sender-email">${escapeHtml(sender.email)}</div>
+                        ${badges ? `<div class="sender-meta">${badges}</div>` : ''}
+                    </div>
+                    <span class="count-pill ${countClass}">${sender.count}</span>
+                `;
+                list.appendChild(row);
+            });
+        }
+
+        // ─────────────────────────────────────
+        // Filter
+        // ─────────────────────────────────────
+        function filterSenders(filter, btn) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            let filtered;
+            if (filter === 'all') {
+                filtered = sendersData;
+            } else if (filter === 'never_read') {
+                filtered = sendersData.filter(s => s.never_read);
+            } else {
+                filtered = sendersData.filter(s => s.safety === filter);
+            }
+
+            filteredData = filtered;
+            renderSenderList(filtered);
+            document.getElementById('totalBadge').textContent =
+                `${filtered.length} of ${sendersData.length} senders`;
+        }
+
+        // ─────────────────────────────────────
+        // Helpers
+        // ─────────────────────────────────────
+        function getCategoryEmoji(category) {
+            const emojis = {
+                'Newsletter': '📰',
+                'Promotional': '🛍️',
+                'Notification': '🔔',
+                'Personal': '👤',
+                'Work': '💼',
+                'Social': '💬',
+                'Spam': '🚫',
+                'Other': '📧'
+            };
+            return emojis[category] || '📧';
+        }
+
+        function getSafetyLabel(safety) {
+            const labels = {
+                'safe': '🔴 Safe to Delete',
+                'review': '🟡 Review First',
+                'keep': '🟢 Keep'
+            };
+            return labels[safety] || safety;
+        }
+
+        // ─────────────────────────────────────
+        // Toggle Row
+        // ─────────────────────────────────────
+        function toggleRow(email) {
+            const id = btoa(unescape(encodeURIComponent(email))).replace(/=/g, '');
+            const cb = document.getElementById(`cb-${id}`);
+            if (cb) {
+                cb.checked = !cb.checked;
+                toggleSender(email);
+            }
+        }
+
+        function toggleSender(email) {
+            const id = btoa(unescape(encodeURIComponent(email))).replace(/=/g, '');
+            const cb = document.getElementById(`cb-${id}`);
+            const row = document.getElementById(`row-${id}`);
+
+            if (cb && cb.checked) {
+                selectedEmails.add(email);
+                if (row) row.classList.add('selected');
+            } else {
+                selectedEmails.delete(email);
+                if (row) row.classList.remove('selected');
+                document.getElementById('selectAll').checked = false;
+            }
+            updateActionBar();
+        }
+
+        function toggleSelectAll() {
+            const checked = document.getElementById('selectAll').checked;
+            filteredData.forEach(sender => {
+                const id = btoa(unescape(encodeURIComponent(sender.email))).replace(/=/g, '');
+                const cb = document.getElementById(`cb-${id}`);
+                const row = document.getElementById(`row-${id}`);
+                if (cb) {
+                    cb.checked = checked;
+                    if (checked) {
+                        selectedEmails.add(sender.email);
+                        if (row) row.classList.add('selected');
+                    } else {
+                        selectedEmails.delete(sender.email);
+                        if (row) row.classList.remove('selected');
+                    }
+                }
+            });
+            updateActionBar();
+        }
+
+        function updateActionBar() {
+            const count = selectedEmails.size;
+            const deleteBtn = document.getElementById('deleteBtn');
+            const selectedInfo = document.getElementById('selectedInfo');
+
+            if (count > 0) {
+                deleteBtn.style.display = 'block';
+                selectedInfo.style.display = 'block';
+                document.getElementById('selectedCount').textContent = count;
+                let totalEmails = 0;
+                selectedEmails.forEach(email => {
+                    totalEmails += emailCounts[email] || 0;
+                });
+                document.getElementById('selectedEmailCount').textContent = totalEmails;
+            } else {
+                deleteBtn.style.display = 'none';
+                selectedInfo.style.display = 'none';
+            }
+        }
+
+        // ─────────────────────────────────────
+        // Delete
+        // ─────────────────────────────────────
+        async function confirmDelete() {
+            const selectedCount = selectedEmails.size;
+            const totalEmailCount = document.getElementById('selectedEmailCount').textContent;
+
+           const deleteAllTime = document.getElementById('deleteAllTime').checked
+            const keepRecentCheck = document.getElementById('keepRecentCheck').checked
+            const keepRecentValue = document.getElementById('keepRecentValue').value
+            const keepRecentUnit = document.getElementById('keepRecentUnit').value
+
+            // Build warning message
+            let timeWarning = ''
+            if (deleteAllTime) {
+                timeWarning = '⚠️ ALL EMAILS EVER from these senders will be deleted!'
+            } else if (keepRecentCheck) {
+                timeWarning = `Emails older than ${keepRecentValue} ${keepRecentUnit} will be deleted.\nRecent emails will be kept!`
+            } else {
+                timeWarning = 'Emails from selected time period will be deleted.'
+            }
+
+            const confirmed = confirm(
+                `⚠️ Are you sure?\n\n` +
+                `You are about to delete emails from ${selectedCount} sender(s).\n\n` +
+                `${timeWarning}\n\n` +
+                `This action CANNOT be undone!`
+            );
+
+            if (!confirmed) return;
+
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ Deleting...';
+
+            try {
+                const deleteAllTime = document.getElementById('deleteAllTime').checked
+                const keepRecentCheck = document.getElementById('keepRecentCheck').checked
+                const keepRecentValue = parseInt(document.getElementById('keepRecentValue').value)
+                const keepRecentUnit = document.getElementById('keepRecentUnit').value
+
+                // Calculate keep_months
+                let keepMonths = null
+                if (keepRecentCheck) {
+                    keepMonths = keepRecentUnit === 'months'
+                        ? keepRecentValue
+                        : keepRecentValue / 30
+                }
+
+                const response = await fetch('/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        emails: Array.from(selectedEmails),
+                        months: selectedDays ? selectedDays / 30 : selectedMonths,
+                        delete_all_time: deleteAllTime,
+                        keep_recent_months: keepMonths
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showAlert(
+                        `✅ Successfully deleted ${data.total_deleted} emails from ${selectedCount} sender(s)!`,
+                        'success'
+                    );
+
+                    selectedEmails.forEach(email => {
+                        const id = btoa(unescape(encodeURIComponent(email))).replace(/=/g, '');
+                        const row = document.getElementById(`row-${id}`);
+                        if (row) row.remove();
+                    });
+
+                    sendersData = sendersData.filter(s => !selectedEmails.has(s.email));
+                    filteredData = filteredData.filter(s => !selectedEmails.has(s.email));
+                    document.getElementById('totalBadge').textContent =
+                        `${filteredData.length} senders found`;
+
+                    selectedEmails.clear();
+                    emailCounts = {};
+                    sendersData.forEach(s => emailCounts[s.email] = s.count);
+                    document.getElementById('selectAll').checked = false;
+                    updateActionBar();
+                } else {
+                    showAlert('Error: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Something went wrong: ' + error.message, 'error');
+            } finally {
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = '🗑️ Delete Selected';
+            }
+        }
+
+        function showAlert(message, type) {
+            const alert = document.getElementById('deleteAlert');
+            alert.textContent = message;
+            alert.className = `alert ${type}`;
+            alert.style.display = 'block';
+            setTimeout(() => { alert.style.display = 'none'; }, 6000);
+        }
+
+// ─────────────────────────────────────
+        // Delete Mode Toggle
+        // ─────────────────────────────────────
+        function toggleDeleteMode(mode) {
+            const deleteAllTime = document.getElementById('deleteAllTime')
+            const keepRecentCheck = document.getElementById('keepRecentCheck')
+            const keepRecentValue = document.getElementById('keepRecentValue')
+            const keepRecentUnit = document.getElementById('keepRecentUnit')
+
+            if (mode === 'all' && deleteAllTime.checked) {
+                // Uncheck keep recent
+                keepRecentCheck.checked = false
+                keepRecentValue.disabled = true
+                keepRecentUnit.disabled = true
+            } else if (mode === 'recent' && keepRecentCheck.checked) {
+                // Uncheck delete all
+                deleteAllTime.checked = false
+                keepRecentValue.disabled = false
+                keepRecentUnit.disabled = false
+            } else {
+                // Both unchecked — disable inputs
+                keepRecentValue.disabled = true
+                keepRecentUnit.disabled = true
+            }
+        }
+// ─────────────────────────────────────
+        // Tab Switching
+        // ─────────────────────────────────────
+        function switchTab(tabId, btn) {
+            // Update buttons
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+            btn.classList.add('active')
+
+            // Update content
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'))
+            document.getElementById(tabId).classList.add('active')
+        }
+
+        // ─────────────────────────────────────
+        // Never Read Tab
+        // ─────────────────────────────────────
+        function populateNeverRead(senders) {
+            const neverReadSenders = senders.filter(s => s.never_read)
+            const list = document.getElementById('neverReadList')
+            const badge = document.getElementById('neverReadBadge')
+
+            // Update badge
+            badge.textContent = neverReadSenders.length
+            badge.style.display = neverReadSenders.length > 0 ? 'inline' : 'none'
+
+            if (neverReadSenders.length === 0) {
+                list.innerHTML = `
+                    <div style="text-align:center;padding:40px;color:#999">
+                        🎉 No never-read senders found!
+                    </div>`
+                return
+            }
+
+            list.innerHTML = ''
+            neverReadSenders.forEach(sender => {
+                const row = document.createElement('div')
+                row.className = 'unsubscribe-row'
+                row.id = `unsub-${btoa(unescape(encodeURIComponent(sender.email))).replace(/=/g, '')}`
+
+                row.innerHTML = `
+                    <div class="sender-info" style="flex:1">
+                        <div class="sender-name">${escapeHtml(sender.name)}</div>
+                        <div class="sender-email">${escapeHtml(sender.email)}</div>
+                        <div class="unsub-status" id="status-${btoa(unescape(encodeURIComponent(sender.email))).replace(/=/g, '')}">
+                            ${sender.count} emails — never opened
+                        </div>
+                    </div>
+                    <div class="unsub-actions">
+                        <button class="unsub-btn unsub-btn-find"
+                            id="findbtn-${btoa(unescape(encodeURIComponent(sender.email))).replace(/=/g, '')}"
+                            onclick="findUnsubscribe('${escapeHtml(sender.email)}', '${escapeHtml(sender.name)}')">
+                            🔍 Find Link
+                        </button>
+                    </div>
+                `
+                list.appendChild(row)
+            })
+        }
+
+        // ─────────────────────────────────────
+        // Find Unsubscribe Link
+        // ─────────────────────────────────────
+        async function findUnsubscribe(email, name) {
+            const id = btoa(unescape(encodeURIComponent(email))).replace(/=/g, '')
+            const findBtn = document.getElementById(`findbtn-${id}`)
+            const status = document.getElementById(`status-${id}`)
+            const actionsDiv = findBtn.parentElement
+
+            // Show loading
+            findBtn.textContent = '⏳ Finding...'
+            findBtn.disabled = true
+
+            try {
+                const response = await fetch('/find_unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                })
+
+                const data = await response.json()
+
+                if (data.status === 'success') {
+                    const unsub = data.unsubscribe
+
+                    if (unsub.found) {
+                        // Remove find button
+                        findBtn.remove()
+
+                        // Show available options
+                        if (unsub.url) {
+                            const linkBtn = document.createElement('button')
+                            linkBtn.className = 'unsub-btn unsub-btn-link'
+                            linkBtn.innerHTML = '🔗 Open Link'
+                            linkBtn.onclick = () => {
+                                window.open(unsub.url, '_blank')
+                                status.textContent = '✅ Unsubscribe link opened!'
+                                status.className = 'unsub-status success'
+                            }
+                            actionsDiv.appendChild(linkBtn)
+                        }
+
+                        if (unsub.email) {
+                            const emailBtn = document.createElement('button')
+                            emailBtn.className = 'unsub-btn unsub-btn-email'
+                            emailBtn.innerHTML = '✉️ Send Email'
+                            emailBtn.onclick = () => sendUnsubscribeEmail(
+                                email, name, unsub.email, emailBtn, status
+                            )
+                            actionsDiv.appendChild(emailBtn)
+                        }
+
+                        status.textContent = '✅ Unsubscribe option found!'
+                        status.className = 'unsub-status success'
+
+                    } else {
+                        // No unsubscribe found
+                        findBtn.textContent = '❌ Not Found'
+                        findBtn.disabled = true
+                        status.textContent = 'No unsubscribe link found in latest email'
+                        status.className = 'unsub-status error'
+                    }
+                }
+            } catch (error) {
+                findBtn.textContent = '🔍 Find Link'
+                findBtn.disabled = false
+                status.textContent = 'Error: ' + error.message
+                status.className = 'unsub-status error'
+            }
+        }
+
+        // ─────────────────────────────────────
+        // Send Unsubscribe Email
+        // ─────────────────────────────────────
+        async function sendUnsubscribeEmail(senderEmail, senderName, unsubEmail, btn, status) {
+            const confirmed = confirm(
+                `✉️ Send unsubscribe email?\n\n` +
+                `This will send an unsubscribe request to:\n` +
+                `${unsubEmail}\n\n` +
+                `On behalf of: ${senderName}`
+            )
+
+            if (!confirmed) return
+
+            btn.textContent = '⏳ Sending...'
+            btn.disabled = true
+
+            try {
+                const response = await fetch('/send_unsubscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        unsubscribe_email: unsubEmail,
+                        sender_name: senderName
+                    })
+                })
+
+                const data = await response.json()
+
+                if (data.status === 'success') {
+                    btn.textContent = '✅ Sent!'
+                    status.textContent = `✅ Unsubscribe email sent to ${unsubEmail}`
+                    status.className = 'unsub-status success'
+                } else {
+                    btn.textContent = '✉️ Send Email'
+                    btn.disabled = false
+                    status.textContent = 'Error: ' + data.message
+                    status.className = 'unsub-status error'
+                }
+            } catch (error) {
+                btn.textContent = '✉️ Send Email'
+                btn.disabled = false
+                status.textContent = 'Error: ' + error.message
+                status.className = 'unsub-status error'
+            }
+        }
+
+        // ─────────────────────────────────────
+        // AI Summary
+        // ─────────────────────────────────────
+        async function generateSummary(senders) {
+            const summaryCard = document.getElementById('summaryCard')
+            const summaryLoading = document.getElementById('summaryLoading')
+            const summaryContent = document.getElementById('summaryContent')
+            const privacyMode = document.getElementById('privacyToggle')?.checked || false
+
+            // Show card with loading
+            summaryCard.style.display = 'block'
+            summaryLoading.style.display = 'block'
+            summaryContent.style.display = 'none'
+
+            try {
+                const response = await fetch('/summary', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        senders: senders,
+                        privacy_mode: privacyMode
+                    })
+                })
+
+                const data = await response.json()
+
+                if (data.status === 'success') {
+                    renderSummary(data.summary, data.stats)
+                } else {
+                    summaryCard.style.display = 'none'
+                }
+            } catch (error) {
+                console.error('Summary error:', error)
+                summaryCard.style.display = 'none'
+            } finally {
+                summaryLoading.style.display = 'none'
+            }
+        }
+
+        function renderSummary(summary, stats) {
+            const summaryContent = document.getElementById('summaryContent')
+
+            // Headline
+            document.getElementById('summaryHeadline').textContent = summary.headline
+
+            // Stats boxes
+            document.getElementById('summaryStats').innerHTML = `
+                <div class="stat-box">
+                    <span class="stat-number">${stats.total_emails}</span>
+                    <div class="stat-label">Total Emails</div>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">${summary.stats.cleanup_percentage}%</span>
+                    <div class="stat-label">Can Be Deleted</div>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">${stats.never_read}</span>
+                    <div class="stat-label">Never Read</div>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-number">${summary.stats.storage_estimate}</span>
+                    <div class="stat-label">Est. Storage</div>
+                </div>
+            `
+
+            // Insights
+            document.getElementById('summaryInsights').innerHTML = `
+                <div class="summary-section">
+                    <h3>💡 Key Insights</h3>
+                    <ul>
+                        ${summary.insights.map(i => `<li>→ ${i}</li>`).join('')}
+                    </ul>
+                </div>
+            `
+
+            // Recommendations
+            document.getElementById('summaryRecommendations').innerHTML = `
+                <div class="summary-section">
+                    <h3>🎯 Recommendations</h3>
+                    ${summary.recommendations.map(r => `
+                        <div class="recommendation-item">
+                            <span class="rec-impact rec-${r.impact}">${r.impact}</span>
+                            <div>
+                                <div style="font-weight:600;font-size:14px">${r.action}</div>
+                                <div style="font-size:12px;opacity:0.85;margin-top:2px">${r.description}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `
+
+            // Warnings
+            if (summary.warnings && summary.warnings.length > 0) {
+                document.getElementById('summaryWarnings').innerHTML = `
+                    <div class="summary-section">
+                        <h3>⚠️ Important Warnings</h3>
+                        <ul>
+                            ${summary.warnings.map(w => `
+                                <li class="warning-item">⚠️ ${w}</li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                `
+            }
+
+            summaryContent.style.display = 'block'
+        }
+
+        // ─────────────────────────────────────
+        // Chat
+        // ─────────────────────────────────────
+        let chatHistory = []
+        let chatSelections = {}
+    
+
+        function usePrompt(chip) {
+            // Remove emoji prefix for cleaner input
+            const text = chip.textContent.trim().replace(/^[^\s]+\s/, '')
+            document.getElementById('chatInput').value = chip.textContent.trim()
+            sendChat()
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chatInput')
+            const question = input.value.trim()
+            if (!question) return
+
+            const privacyMode = document.getElementById('privacyToggle')?.checked || false
+            const sendBtn = document.getElementById('chatSendBtn')
+
+            // Add user message to UI
+            addChatMessage('user', question)
+            input.value = ''
+            sendBtn.disabled = true
+
+            // Add to history
+            chatHistory.push({ role: 'user', content: question })
+
+            // Show typing indicator
+            const typingId = addTypingIndicator()
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question: question,
+                        senders: sendersData,
+                        privacy_mode: privacyMode,
+                        history: chatHistory
+                    })
+                })
+
+                const data = await response.json()
+
+                // Remove typing indicator
+                removeTypingIndicator(typingId)
+
+                if (data.status === 'success') {
+                    const aiResponse = data.response
+
+                    // Add AI answer to UI
+                    addChatMessage('assistant', aiResponse.answer)
+
+                    // Add matched senders if any
+                    if (aiResponse.matched_senders &&
+                        aiResponse.matched_senders.length > 0) {
+                        addMatchedSenders(aiResponse.matched_senders)
+                    }
+
+                    // Add suggestion if any
+                    if (aiResponse.suggestion) {
+                        addChatMessage('assistant',
+                            `💡 ${aiResponse.suggestion}`)
+                    }
+
+                    // Add to history
+                    chatHistory.push({
+                        role: 'assistant',
+                        content: aiResponse.answer
+                    })
+                } else {
+                    removeTypingIndicator(typingId)
+                    addChatMessage('assistant',
+                        '❌ Sorry, something went wrong. Please try again.')
+                }
+            } catch (error) {
+                removeTypingIndicator(typingId)
+                addChatMessage('assistant',
+                    '❌ Error: ' + error.message)
+            } finally {
+                sendBtn.disabled = false
+                // Scroll to bottom
+                const messages = document.getElementById('chatMessages')
+                messages.scrollTop = messages.scrollHeight
+            }
+        }
+
+        function addChatMessage(role, text) {
+            const messages = document.getElementById('chatMessages')
+            const div = document.createElement('div')
+            div.className = `chat-message ${role}`
+            div.innerHTML = `
+                <div class="message-bubble">${escapeHtml(text)}</div>
+            `
+            messages.appendChild(div)
+            messages.scrollTop = messages.scrollHeight
+            return div
+        }
+
+        function addTypingIndicator() {
+            const messages = document.getElementById('chatMessages')
+            const id = 'typing-' + Date.now()
+            const div = document.createElement('div')
+            div.className = 'chat-message assistant'
+            div.id = id
+            div.innerHTML = `
+                <div class="message-bubble" style="color:#888">
+                    🧠 Thinking...
+                </div>
+            `
+            messages.appendChild(div)
+            messages.scrollTop = messages.scrollHeight
+            return id
+        }
+
+        function removeTypingIndicator(id) {
+            const el = document.getElementById(id)
+            if (el) el.remove()
+        }
+
+       // ─────────────────────────────────────
+        // Matched Senders — Simplified
+        // ─────────────────────────────────────
+        function addMatchedSenders(senders) {
+            const messages = document.getElementById('chatMessages')
+            const div = document.createElement('div')
+            div.className = 'chat-message assistant'
+
+            // Unique group timestamp
+            const ts = Date.now()
+            const groupId = `group-${ts}`
+            const deleteBtnId = `chatdel-${ts}`
+
+            // Initialize selection for this group
+            chatSelections[groupId] = new Set()
+
+            // Build rows
+            let rows = ''
+            senders.forEach((s, i) => {
+                rows += `
+                <div class="matched-sender-row"
+                    data-group="${groupId}"
+                    data-index="${i}"
+                    data-email="${escapeHtml(s.email)}"
+                    data-deletebtn="${deleteBtnId}">
+                    <input type="checkbox"
+                        data-group="${groupId}"
+                        data-index="${i}"
+                        data-email="${escapeHtml(s.email)}"
+                        data-deletebtn="${deleteBtnId}"
+                        style="width:16px;height:16px;accent-color:#4285f4;pointer-events:none">
+                    <div style="flex:1">
+                        <div style="font-size:14px;font-weight:500">
+                            ${escapeHtml(s.name)}
+                        </div>
+                        <div style="font-size:12px;color:#999">
+                            ${escapeHtml(s.email)}
+                        </div>
+                        <div class="matched-reason">
+                            ${escapeHtml(s.reason)} · ${s.count} emails
+                        </div>
+                    </div>
+                    <span class="count-pill">${s.count}</span>
+                </div>`
+            })
+
+            div.innerHTML = `
+                <div class="matched-senders" id="${groupId}">
+                    ${rows}
+                </div>
+                <button class="chat-delete-btn"
+                    id="${deleteBtnId}"
+                    style="display:none"
+                    onclick="deleteChatSelected('${groupId}', '${deleteBtnId}')">
+                    🗑️ Delete Selected
+                </button>
+            `
+
+            messages.appendChild(div)
+            messages.scrollTop = messages.scrollHeight
+
+            // Attach click handlers AFTER DOM is ready
+            div.querySelectorAll('.matched-sender-row').forEach(row => {
+                row.addEventListener('click', function() {
+                    const group = this.dataset.group
+                    const email = this.dataset.email
+                    const deleteBtn = this.dataset.deletebtn
+                    const cb = this.querySelector('input[type="checkbox"]')
+
+                    // Toggle checkbox
+                    cb.checked = !cb.checked
+
+                    // Update selection set
+                    if (cb.checked) {
+                        chatSelections[group].add(email)
+                        this.classList.add('selected')
+                    } else {
+                        chatSelections[group].delete(email)
+                        this.classList.remove('selected')
+                    }
+
+                    // Update delete button
+                    const btn = document.getElementById(deleteBtn)
+                    const count = chatSelections[group].size
+                    if (btn) {
+                        btn.style.display = count > 0 ? 'block' : 'none'
+                        btn.textContent = `🗑️ Delete ${count} Selected`
+                    }
+                })
+            })
+        }
+
+        // Track selected emails PER response group
+        
+
+        async function deleteChatSelected(groupId, deleteBtnId) {
+            const selected = chatSelections[groupId]
+            if (!selected || selected.size === 0) return
+
+            const confirmed = confirm(
+                `⚠️ Delete emails from ${selected.size} sender(s)?\n\n` +
+                `This cannot be undone!`
+            )
+            if (!confirmed) return
+
+            const deleteBtn = document.getElementById(deleteBtnId)
+            deleteBtn.textContent = '⏳ Deleting...'
+            deleteBtn.disabled = true
+
+            try {
+                const response = await fetch('/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        emails: Array.from(selected),
+                        months: selectedDays ? selectedDays / 30 : selectedMonths,
+                        delete_all_time: false
+                    })
+                })
+
+                const data = await response.json()
+
+                if (data.status === 'success') {
+                    addChatMessage('assistant',
+                        `✅ Deleted ${data.total_deleted} emails from ${selected.size} sender(s)!`)
+
+                    // Remove deleted rows
+                    const group = document.getElementById(groupId)
+                    if (group) {
+                        group.querySelectorAll('.matched-sender-row.selected')
+                            .forEach(row => row.remove())
+                    }
+
+                    // Clear selections
+                    chatSelections[groupId] = new Set()
+                    deleteBtn.style.display = 'none'
+
+                } else {
+                    addChatMessage('assistant', '❌ Error: ' + data.message)
+                    deleteBtn.disabled = false
+                    deleteBtn.textContent = `🗑️ Delete Selected`
+                }
+            } catch (error) {
+                addChatMessage('assistant', '❌ Error: ' + error.message)
+                deleteBtn.disabled = false
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.appendChild(document.createTextNode(text));
+            return div.innerHTML;
+        }
+    </script>
+
+</body>
+</html>
