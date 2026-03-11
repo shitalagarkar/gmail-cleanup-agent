@@ -11,18 +11,24 @@ scan, categorize, and clean up your inbox intelligently.
 ---
 
 ## ✨ Features
+## ✨ Features
 
+### 🆓 Basic Mode — No API Key Needed!
 - 🔍 **Smart Inbox Scanning** — Scan by days, months or years
 - 📁 **Folder Selection** — Choose which Gmail folders to scan
-- 🧠 **AI Categorization** — Auto-categorize emails using GPT-4o Mini
-- 🛡️ **Safety Scoring** — Know what's safe to delete vs keep
+- 🗑️ **Smart Delete** — Delete within period, all ever, or keep recent
 - 📭 **Never Read Detection** — Find emails you've never opened
 - 🔗 **Auto Unsubscribe** — Find and send unsubscribe requests
-- 🗑️ **Smart Delete** — Delete within period, all ever, or keep recent
+
+### 🤖 AI Mode — Optional OpenAI Key
+- 🧠 **AI Categorization** — Auto-categorize emails using GPT-4o Mini
+- 🛡️ **Safety Scoring** — Know what's safe to delete vs keep
 - 💬 **Inbox Chat** — Ask questions in natural language
 - 📊 **AI Summary** — Get intelligent inbox health report
 - 🔒 **Privacy Mode** — Control what data is sent to AI
 
+> 💡 **No OpenAI key? No problem!** Basic Mode works perfectly
+> without any API key. Add your key anytime to unlock AI features.
 ---
 
 ## 🚀 Quick Start
@@ -30,9 +36,8 @@ scan, categorize, and clean up your inbox intelligently.
 ### Prerequisites
 - Python 3.9+
 - Gmail account
-- OpenAI API key ([get one here](https://platform.openai.com))
 - Google Cloud account ([free](https://console.cloud.google.com))
-
+- OpenAI API key — **optional** ([get one here](https://platform.openai.com))
 ---
 
 ### Step 1 — Clone the Repository
@@ -79,10 +84,16 @@ Open your browser at:
 
 ## 💰 Cost
 
-This app uses OpenAI's GPT-4o Mini model:
-- Cost per full scan: ~$0.01 (1 cent!)
-- $5 in credits = 500+ full scans
-- Each user brings their own API key
+### Basic Mode
+- **Completely FREE** — no API key needed!
+- Scan, delete and unsubscribe at zero cost
+
+### AI Mode
+- Uses OpenAI GPT-4o Mini — extremely cheap!
+- Cost per full scan with AI: ~$0.01 (1 cent!)
+- $5 in credits = 500+ full AI scans
+- Each user brings their own OpenAI key
+- No key? Just use Basic Mode for free!
 
 ---
 
