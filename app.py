@@ -91,7 +91,8 @@ def get_gmail_service():
             client_id = creds_data['web']['client_id']
             client_secret = creds_data['web']['client_secret']
 
-            creds = Credentials(
+            from google.oauth2.credentials import Credentials as GoogleCredentials
+            creds = GoogleCredentials(
                 token=token_data['access_token'],
                 refresh_token=token_data.get('refresh_token'),
                 token_uri='https://oauth2.googleapis.com/token',
